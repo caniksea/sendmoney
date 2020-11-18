@@ -1,7 +1,5 @@
 package com.caniksea.poll.mamamoney.model;
 
-import java.io.Serializable;
-
 public class UssdResponse {
 
     private String sessionId, message;

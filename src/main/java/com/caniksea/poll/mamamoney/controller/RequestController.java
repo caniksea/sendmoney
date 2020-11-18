@@ -7,6 +7,7 @@ import com.caniksea.poll.mamamoney.service.CurrencyService;
 import com.caniksea.poll.mamamoney.service.RequestHistoryService;
 import com.caniksea.poll.mamamoney.service.UssdMenuService;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.hibernate.internal.util.StringHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,7 +41,8 @@ public class RequestController {
         UssdResponse ussdResponse = UssdResponseFactory.build(ussdRequest.getSessionId(), "An error occurred; initial menu not found!");
         UssdMenu ussdMenu = getUssdMenu("1");
         if (ussdMenu != null) {
-            RequestHistory requestHistory = RequestHistoryFactory.build(ussdRequest.getMsisdn(), ussdRequest.getSessionId(), "0", "Show menu.");
+            RequestHistory requestHistory = RequestHistoryFactory.build(ussdRequest.getMsisdn(), ussdRequest.getSessionId(), "0", "Show menu.",
+                    true, "Success");
             requestHistoryService.create(requestHistory);
             ussdResponse = UssdResponseFactory.build(ussdRequest.getSessionId(), ussdMenu.getMenuDescription());
         }
@@ -60,16 +62,20 @@ public class RequestController {
         int currentMenu = previousMenu + 1;
         int nextMenu = currentMenu + 1;
         int maxMenu = ussdMenuService.findAll().size();
-        String userEntry = ussdRequest.getUserEntry();
-        if (currentMenu < maxMenu) {
-            if (currentMenu == 1) {
-                ussdResponse = processFirstMenu(ussdRequest, userEntry, currentMenu, nextMenu);
-            } else if (currentMenu == 2) {
-                ussdResponse = processSecondMenu(ussdRequest, latestRequest, userEntry, currentMenu, nextMenu);
-            } else if (currentMenu == 3) {
-                ussdResponse = performThirdMenu(ussdRequest, latestRequest, userEntry, currentMenu);
-            }
-        } else ussdResponse = UssdResponseFactory.build(ussdRequest.getSessionId(), "Invalid menu!");
+        String userEntry = ussdRequest.getUserEntry() == null ? "" : ussdRequest.getUserEntry().trim();
+        if (StringHelper.isEmptyOrWhiteSpace(userEntry))
+            ussdResponse = UssdResponseFactory.build(ussdRequest.getSessionId(), "No selection!");
+        else {
+            if (currentMenu < maxMenu) {
+                if (currentMenu == 1) {
+                    ussdResponse = processFirstMenu(ussdRequest, userEntry, currentMenu, nextMenu);
+                } else if (currentMenu == 2) {
+                    ussdResponse = processSecondMenu(ussdRequest, latestRequest, userEntry, currentMenu, nextMenu);
+                } else if (currentMenu == 3) {
+                    ussdResponse = performThirdMenu(ussdRequest, latestRequest, userEntry, currentMenu);
+                }
+            } else ussdResponse = UssdResponseFactory.build(ussdRequest.getSessionId(), "Session expired!");
+        }
         return ussdResponse;
     }
 
@@ -84,13 +90,22 @@ public class RequestController {
      */
     private UssdResponse performThirdMenu(UssdRequest ussdRequest, RequestHistory latestRequest, String userEntry, int currentMenu) {
         String message = "An error occurred; ";
+        boolean isSuccess = false;
+        String comment;
+        String choice = userEntry;
+        UssdMenu currentMenuObj = getUssdMenu(currentMenu + "");
         if (userEntry.equals("1")) {
             message = "Thank you for using Mama Money!";
-            UssdMenu currentMenuObj = getUssdMenu(currentMenu + "");
-            String amount = latestRequest.getChoice().split(";")[1];
-            RequestHistory requestHistory = RequestHistoryFactory.build(ussdRequest.getMsisdn(), ussdRequest.getSessionId(), currentMenuObj.getMenuNumber(), amount);
-            requestHistoryService.create(requestHistory);
+            isSuccess = true;
+            comment = "Success";
+            choice = latestRequest.getChoice().split(";")[1];
+        } else {
+            comment = "Invalid option selected!";
+            message += comment;
         }
+        RequestHistory requestHistory = RequestHistoryFactory.build(ussdRequest.getMsisdn(), ussdRequest.getSessionId(), currentMenuObj.getMenuNumber(), choice,
+                isSuccess, comment);
+        requestHistoryService.create(requestHistory);
         return UssdResponseFactory.build(ussdRequest.getSessionId(), message);
     }
 
@@ -106,18 +121,27 @@ public class RequestController {
      */
     private UssdResponse processSecondMenu(UssdRequest ussdRequest, RequestHistory latestRequest, String userEntry, int currentMenu, int nextMenu) {
         String message = "An error occurred; ";
+        boolean isSuccess = false;
+        String comment;
         String currencyId = latestRequest.getChoice();
+        String choice = "ZAR" + userEntry;
+        UssdMenu currentMenuObj = getUssdMenu(currentMenu + "");
         Currency currency = currencyService.read(currencyId).orElseGet(null);
         if (NumberUtils.isParsable(userEntry)) {
             BigDecimal amount = new BigDecimal(userEntry);
             BigDecimal converted = currency.getRate().multiply(amount).setScale(2, RoundingMode.HALF_EVEN);
-            UssdMenu currentMenuObj = getUssdMenu(currentMenu + "");
-            String choice = "ZAR" + userEntry + ";" + currency.getCode() + converted.toPlainString();
-            RequestHistory requestHistory = RequestHistoryFactory.build(ussdRequest.getMsisdn(), ussdRequest.getSessionId(), currentMenuObj.getMenuNumber(), choice);
+            choice += ";" + currency.getCode() + converted.toPlainString();
             UssdMenu nextMenuObj = getUssdMenu(nextMenu + "");
             message = String.format(nextMenuObj.getMenuDescription(), converted.toPlainString(), currency.getCode());
-            requestHistoryService.create(requestHistory);
-        } else message += "Invalid amount: " + userEntry;
+            isSuccess = true;
+            comment = "Success";
+        } else {
+            comment = "Invalid amount: " + userEntry;
+            message += comment;
+        }
+        RequestHistory requestHistory = RequestHistoryFactory.build(ussdRequest.getMsisdn(), ussdRequest.getSessionId(), currentMenuObj.getMenuNumber(), choice,
+                isSuccess, comment);
+        requestHistoryService.create(requestHistory);
         return UssdResponseFactory.build(ussdRequest.getSessionId(), message);
     }
 
@@ -132,14 +156,27 @@ public class RequestController {
      */
     private UssdResponse processFirstMenu(UssdRequest ussdRequest, String userEntry, int currentMenu, int nextMenu) {
         String message = "An error occurred; ";
-        Currency currency = currencyService.read(userEntry).orElse(null);
-        if (currency != null) {
-            UssdMenu currentMenuObj = getUssdMenu(currentMenu + "");
-            RequestHistory requestHistory = RequestHistoryFactory.build(ussdRequest.getMsisdn(), ussdRequest.getSessionId(), currentMenuObj.getMenuNumber(), userEntry);
-            UssdMenu nextMenuObj = getUssdMenu(nextMenu + "");
-            message = String.format(nextMenuObj.getMenuDescription(), currency.getCountryName());
-            requestHistoryService.create(requestHistory);
+        boolean isSuccess = false;
+        String comment;
+        UssdMenu currentMenuObj = getUssdMenu(currentMenu + "");
+        if (userEntry.equals("1") || userEntry.equals("2")) {
+            Currency currency = currencyService.read(userEntry).orElse(null);
+            if (currency != null) {
+                isSuccess = true;
+                comment = "Success";
+                UssdMenu nextMenuObj = getUssdMenu(nextMenu + "");
+                message = String.format(nextMenuObj.getMenuDescription(), currency.getCountryName());
+            } else {
+                comment = "No country/currency found!";
+                message += comment;
+            }
+        } else {
+            comment = "Invalid option selected";
+            message += comment;
         }
+        RequestHistory requestHistory = RequestHistoryFactory.build(ussdRequest.getMsisdn(), ussdRequest.getSessionId(), currentMenuObj.getMenuNumber(),
+                userEntry, isSuccess, comment);
+        requestHistoryService.create(requestHistory);
         return UssdResponseFactory.build(ussdRequest.getSessionId(), message);
     }
 
@@ -157,13 +194,21 @@ public class RequestController {
     public ResponseEntity<UssdResponse> request(@RequestBody UssdRequest ussdRequest) {
         logger.info("Request: " + ussdRequest);
         UssdResponse ussdResponse;
-        Optional<RequestHistory> optionalRequestHistory = requestHistoryService.getLatest(ussdRequest.getMsisdn(), ussdRequest.getSessionId());
-        if (optionalRequestHistory.isPresent()) {
-            RequestHistory latestRequest = optionalRequestHistory.get();
-            ussdResponse = processSubsequent(ussdRequest, latestRequest);
-        } else {
-            logger.info("No request history; assuming initial request.");
-            ussdResponse = processInitial(ussdRequest);
+        if (StringHelper.isEmptyOrWhiteSpace(ussdRequest.getSessionId()))
+            ussdResponse = UssdResponseFactory.build(ussdRequest.getSessionId(), "SessionId is required!");
+        else if (StringHelper.isEmptyOrWhiteSpace(ussdRequest.getMsisdn()))
+            ussdResponse = UssdResponseFactory.build(ussdRequest.getSessionId(), "MSISDN is required");
+        else {
+            Optional<RequestHistory> optionalRequestHistory = requestHistoryService.getLatest(ussdRequest.getMsisdn(), ussdRequest.getSessionId());
+            if (optionalRequestHistory.isPresent()) {
+                RequestHistory latestRequest = optionalRequestHistory.get();
+                if (latestRequest.isSuccess())
+                    ussdResponse = processSubsequent(ussdRequest, latestRequest);
+                else ussdResponse = UssdResponseFactory.build(ussdRequest.getSessionId(), "Invalid session.");
+            } else {
+                logger.info("No request history; assuming initial request.");
+                ussdResponse = processInitial(ussdRequest);
+            }
         }
         return ResponseEntity.ok(ussdResponse);
     }

@@ -3,6 +3,8 @@ package com.caniksea.poll.mamamoney.model;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.IdClass;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -16,8 +18,11 @@ import java.util.stream.Collectors;
 public class RequestHistory {
 
     @Id
+    @NotNull
+    @NotBlank
     private String msisdn, sessionId, menuNumber;
-    private String choice;
+    private String choice, comment;
+    private boolean isSuccess;
     private LocalDateTime dateTime;
 
     private RequestHistory(Builder builder) {
@@ -25,6 +30,8 @@ public class RequestHistory {
         this.sessionId = builder.sessionId;
         this.menuNumber = builder.menuNumber;
         this.choice = builder.choice;
+        this.isSuccess = builder.isSuccess;
+        this.comment = builder.comment;
         this.dateTime = builder.dateTime;
     }
 
@@ -46,6 +53,14 @@ public class RequestHistory {
         return choice;
     }
 
+    public boolean isSuccess() {
+        return isSuccess;
+    }
+
+    public String getComment() {
+        return comment;
+    }
+
     public LocalDateTime getDateTime() {
         return dateTime;
     }
@@ -57,12 +72,15 @@ public class RequestHistory {
                 ", sessionId='" + sessionId + '\'' +
                 ", menuNumber='" + menuNumber + '\'' +
                 ", choice='" + choice + '\'' +
+                ", comment='" + comment + '\'' +
+                ", isSuccess=" + isSuccess +
                 ", dateTime=" + dateTime +
                 '}';
     }
 
     public static class Builder {
-        private String msisdn, sessionId, menuNumber, choice;
+        private String msisdn, sessionId, menuNumber, choice, comment;
+        private boolean isSuccess;
         private LocalDateTime dateTime;
 
         public Builder msisdn(String msisdn) {
@@ -84,6 +102,17 @@ public class RequestHistory {
             this.choice = choice;
             return this;
         }
+
+        public Builder isSuccess(boolean isSuccess) {
+            this.isSuccess = isSuccess;
+            return this;
+        }
+
+        public Builder comment(String comment) {
+            this.comment = comment;
+            return this;
+        }
+
         public Builder dateTime(LocalDateTime dateTime) {
             this.dateTime = dateTime;
             return this;
