@@ -1,0 +1,15 @@
+#Maven specifics
+/target
+
+# IntelliJ specifics
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Custom
+/data
+
+# Misc
+pom.xml.releaseBackup
+pom.xml.tag
