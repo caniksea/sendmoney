@@ -29,8 +29,10 @@ public class RequestControllerTest {
 
     @Test
     public void request() {
-        UssdRequest request = UssdRequestFactory.build("0745632588", "000-001", "56ft2");
+        UssdRequest request = UssdRequestFactory.build("0785662514", "000.000.003", "1");
         ResponseEntity<UssdResponse> response = testRestTemplate.postForEntity(this.baseURL, request, UssdResponse.class);
-        System.out.println(response);
+        System.out.println(response.getStatusCode());
+        System.out.println(response.getBody());
+        assertNotNull(response.getBody());
     }
 }

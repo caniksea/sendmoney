@@ -29,9 +29,9 @@ public class RequestHistoryServiceImpl implements RequestHistoryService {
     @Override
     public Optional<RequestHistory> getLatest(String msisdn, String sessionId) {
         Set<RequestHistory> requestHistory = findByMSISDNnSessionId(msisdn, sessionId);
-        requestHistory = RequestHistory.sortByDateAsc(requestHistory);
         if (requestHistory.isEmpty())
             return Optional.empty();
+        requestHistory = RequestHistory.sortByDateAsc(requestHistory);
         return Optional.of(requestHistory.iterator().next());
     }
 
