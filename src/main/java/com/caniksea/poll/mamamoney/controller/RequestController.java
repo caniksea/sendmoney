@@ -129,12 +129,17 @@ public class RequestController {
         Currency currency = currencyService.read(currencyId).orElseGet(null);
         if (NumberUtils.isParsable(userEntry)) {
             BigDecimal amount = new BigDecimal(userEntry);
-            BigDecimal converted = currency.getRate().multiply(amount).setScale(2, RoundingMode.HALF_EVEN);
-            choice += ";" + currency.getCode() + converted.toPlainString();
-            UssdMenu nextMenuObj = getUssdMenu(nextMenu + "");
-            message = String.format(nextMenuObj.getMenuDescription(), converted.toPlainString(), currency.getCode());
-            isSuccess = true;
-            comment = "Success";
+            if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+                comment = String.format("Amount: %s, should be greater than 0", userEntry);
+                message += comment;
+            } else {
+                BigDecimal converted = currency.getRate().multiply(amount).setScale(2, RoundingMode.HALF_EVEN);
+                choice += ";" + currency.getCode() + converted.toPlainString();
+                UssdMenu nextMenuObj = getUssdMenu(nextMenu + "");
+                message = String.format(nextMenuObj.getMenuDescription(), converted.toPlainString(), currency.getCode());
+                isSuccess = true;
+                comment = "Success";
+            }
         } else {
             comment = "Invalid amount: " + userEntry;
             message += comment;
